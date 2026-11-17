@@ -13,7 +13,8 @@ main { max-width:680px; margin:0 auto; padding:20px 16px 48px; }
 header { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
 header svg { flex:none; }
 h1 { font-size:26px; margin:0; }
-.tag { color:var(--y); font-weight:700; font-size:15px; margin:0 0 18px; }
+.tag { color:var(--y); font-weight:700; font-size:15px; margin:0 0 10px; }
+.note { color:var(--mute); font-size:15px; margin:0 0 18px; padding:10px 12px; border-left:3px solid var(--y); background:var(--card); border-radius:6px; }
 label { display:block; font-weight:700; margin:16px 0 6px; }
 label small { font-weight:400; color:var(--mute); }
 textarea { width:100%; min-height:180px; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--fg); font:inherit; resize:vertical; }
@@ -44,6 +45,7 @@ footer a { color:var(--y); }
     <h1>AI 감독관</h1>
   </header>
   <p class="tag">AI가 「다 했습니다」 할 때, 진짜 했는지 잡습니다</p>
+  <p class="note">사실 여부는 못 가립니다. 확인 없이 「다 했다」 · 「내일 알려 드린다」 · 출처 없는 숫자 같은 <b>말버릇</b>만 잡습니다. 앞 답을 같이 넣으면 숫자 바뀜까지 잡습니다.</p>
 
   <label for="ans">AI 답 붙여 넣기 <small>(ChatGPT · Claude · Gemini 앱에서 길게 눌러 복사)</small></label>
   <textarea id="ans" placeholder="예) 수정 완료했습니다. 이제 정상 작동합니다. 내일 오전에 다시 확인해 드릴게요."></textarea>
