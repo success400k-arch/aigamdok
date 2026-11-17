@@ -1,0 +1,223 @@
+TEST 줄1
+줄2<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 감독관 — 붙여넣기 검사</title>
+<meta name="description" content="AI 답을 붙여 넣으면 확인 안 된 완료 · 지킬 수 없는 약속 · 출처 없는 숫자를 표시합니다. 내용은 내 폰 안에서만 검사합니다.">
+<style>
+:root { --bg:#1e2025; --card:#272a31; --fg:#f2f3f5; --mute:#aab0bb; --y:#ffbe00; --line:#3a3e47; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.55 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+main { max-width:680px; margin:0 auto; padding:20px 16px 48px; }
+header { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+header svg { flex:none; }
+h1 { font-size:26px; margin:0; }
+.tag { color:var(--y); font-weight:700; font-size:15px; margin:0 0 18px; }
+label { display:block; font-weight:700; margin:16px 0 6px; }
+label small { font-weight:400; color:var(--mute); }
+textarea { width:100%; min-height:180px; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--fg); font:inherit; resize:vertical; }
+textarea.small { min-height:70px; }
+details { margin-top:10px; color:var(--mute); }
+details summary { cursor:pointer; padding:6px 0; }
+.row { display:flex; gap:10px; margin-top:16px; }
+button { font:inherit; font-weight:700; border-radius:10px; padding:14px 18px; border:0; cursor:pointer; }
+#go { flex:1; background:var(--y); color:#1e2025; font-size:18px; }
+#clear { background:transparent; color:var(--mute); border:1px solid var(--line); }
+#out { margin-top:20px; }
+.box { border:1px solid #e0a800; border-radius:10px; background:rgba(255,193,7,.10); padding:14px; }
+.box h2 { font-size:18px; margin:0 0 8px; }
+.box ul { margin:0 0 12px 20px; padding:0; }
+.box li { margin-bottom:8px; }
+.box li span { color:var(--mute); display:block; font-size:15px; }
+.ok { border:1px solid var(--line); border-radius:10px; padding:14px; color:var(--mute); }
+#ask { width:100%; background:transparent; color:var(--fg); border:1px solid #e0a800; }
+#asktext { display:none; margin-top:10px; font-size:15px; white-space:pre-wrap; background:var(--card); padding:10px; border-radius:8px; }
+footer { margin-top:28px; color:var(--mute); font-size:14px; }
+footer a { color:var(--y); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg width="44" height="44" viewBox="0 0 100 100" aria-hidden="true"><circle cx="40" cy="40" r="30" fill="none" stroke="#ffbe00" stroke-width="10"/><line x1="61" y1="61" x2="90" y2="90" stroke="#ffbe00" stroke-width="13" stroke-linecap="round"/><rect x="35" y="20" width="10" height="26" rx="5" fill="#fff"/><circle cx="40" cy="56" r="6" fill="#fff"/></svg>
+    <h1>AI 감독관</h1>
+  </header>
+  <p class="tag">AI가 「다 했습니다」 할 때, 진짜 했는지 잡습니다</p>
+
+  <label for="ans">AI 답 붙여 넣기 <small>(ChatGPT · Claude · Gemini 앱에서 길게 눌러 복사)</small></label>
+  <textarea id="ans" placeholder="예) 수정 완료했습니다. 이제 정상 작동합니다. 내일 오전에 다시 확인해 드릴게요."></textarea>
+
+  <details>
+    <summary>더 정확하게 (선택)</summary>
+    <label for="prior">같은 대화의 앞 답 <small>— 숫자가 바뀌었는지 봄</small></label>
+    <textarea id="prior" class="small"></textarea>
+    <label for="mine">내가 AI한테 한 말 <small>— 「~하지 마」 한 말을 또 하는지 봄</small></label>
+    <textarea id="mine" class="small"></textarea>
+  </details>
+
+  <div class="row">
+    <button id="go">검사하기</button>
+    <button id="clear">지우기</button>
+  </div>
+  <div id="out" aria-live="polite"></div>
+
+  <footer>
+    붙여 넣은 글은 이 폰(브라우저) 안에서만 검사하고 어디로도 보내지 않습니다.<br>
+    문구 규칙이라 틀릴 때가 있습니다. 표시는 「의심」까지만입니다.<br>
+    잘못 잡거나 놓친 것 제보: <a href="https://cafe.naver.com/aigamdok">cafe.naver.com/aigamdok</a>
+  </footer>
+</main>
+<script>
+// AI 감독관 — 답 검사 규칙(화면 글자만 봄, 모델 · 프롬프트와 무관). 브라우저와 node 시험에서 같이 씀.
+// 규칙은 대장 · Claude 실제 오류 장부(2026-11)에서 뽑음. 오탐보다 놓침을 줄이되, 표시는 「의심」으로만.
+(function (root) {
+  const EVIDENCE = /(```|확인했|확인함|확인한\s*뒤|확인하고|돌려\s*봤|커밋|commit\s*[0-9a-f]{6,}|[0-9a-f]{7,40}`|확인 결과|결과[:：]|출력|로그(?!인)|실행 결과|열어 보니|열어서|스크린샷|캡처|verified|output|log shows|I ran|I checked|tested)/i;
+  const SOURCE = /(출처|에 따르면|기준[)）]|발표|공시|보고서|자료[:：]|according to|source|https?:\/\/|\[\d+\])/i;
+
+  const DONE = /(완료했습니다|완료되었습니다|끝났습니다|해결했습니다|해결되었습니다|고쳤습니다|수정했습니다|완료됐습니다|완료했어요|고쳤어요|수정했어요|해결했어요|이제\s*(됩니다|작동합니다|정상)|정상(적으로)?\s*작동(?!하지|\s*안)|잘\s*돌아갑니다|문제없이\s*(됩니다|작동)|\b(it'?s|it is) (done|fixed|working)\b|\bnow works\b|\bI('ve| have) (fixed|completed|finished)\b)/i;
+  const PROMISE = /((나중에|이따가?|잠시\s*후|조금\s*뒤|내일|다음에|\d{1,2}\s*시(\s*\d{1,2}\s*분)?\s*에|\d{1,2}:\d{2}\s*에)[^.!?\n]{0,30}?(알려\s*드[리릴려]|연락\s*드[리릴려]|다시\s*확인(?:해\s*드|하겠|할게)|확인해\s*드[리릴려]|보내\s*드[리릴려]|챙겨\s*드[리릴려]|여쭙)|\bI('ll| will) (remind you|get back to you|follow up|check (back|again|later)|let you know)\b)/i;
+  const MONEYNUM = /([+\-−]?\d[\d,]*(?:\.\d+)?)\s*(%|퍼센트|원|만\s*원|억|달러|\$)/g;
+  const STEP = /^\s*(\d+[.)]|[①-⑩])\s+.*(설정|메뉴|클릭|누르|누릅|눌러|선택|들어가|Settings|click|tap|open)/im;
+  // 11-16 실답 325개 시험: 가격 · 일반 숫자까지 다 잡으면 3개 중 1개꼴로 상자(너무 시끄러움) → 성과 · 효과 주장 숫자만
+  const CLAIM = /(수익|매출|성과|절약|증가|감소|늘었|줄었|올랐|떨어|평균|확률|승률|성공률|정확도|만족도|효과|개선|향상|상승|하락)/;
+  const ENDED = /(접수|신청|모집|기간|마감|판매|행사|시즌|이벤트|세일|공모|청약)\S{0,3}\s*(은|는|이|가|도)?\s*(이미\s*)?끝났/;
+  const TRIED = /(해\s*봤|직접\s*(해|확인)|테스트했|시험해|열어\s*봤|tested|I tried)/i;
+  // 11-16 커뮤니티 조사: 「출처 구라」 · 「모르면 모른다 해야지 뻔뻔하게」 — 강한 확신 또는 이름만 댄 출처, 링크 없음
+  const SURE = /((?<!더\s?)확실합니다|틀림없|분명합니다|100\s*%\s*(확실|맞)|반드시\s*[^.!?\n]{0,20}(됩니다|입니다)|guaranteed|without a doubt)/i;
+  const NAMEDSRC = /((공식\s*)?(문서|자료|연구|조사|논문|통계|가이드|발표)(에\s*따르면|에\s*의하면|에서는|상으로)|according to (the )?(docs|documentation|studies|research|a study))/i;
+  const LINK = /(https?:\/\/|www\.|\[\d+\])/i;
+  // 11-16 에펨 · 국비 카페: 「하지 말라고 알려줘도 다음 질문에서 또」 — 사용자가 금지한 말
+  const BAN = /(?:「([^」\n]{2,30})」|"([^"\n]{2,30})"|“([^”\n]{2,30})”|'([^'\n]{2,30})')\s*(?:이런\s*말|라는\s*말|같은\s*말|이란\s*말|이?라고|는|은|을|를|이|가)?\s*(?:좀\s*|제발\s*|다시는\s*|앞으로\s*)?(?:하지\s*마|쓰지\s*마|붙이지\s*마|넣지\s*마|빼(?!먹)|그만|금지|말지\s*마|don'?t say|stop saying|never say)/gi;
+
+  // 사용자 말에서 금지한 문구 뽑기
+  function bans(userTexts) {
+    const out = [];
+    for (const u of userTexts || []) {
+      let m; BAN.lastIndex = 0;
+      while ((m = BAN.exec(String(u)))) {
+        const p = (m[1] || m[2] || m[3] || m[4] || '').trim();
+        if (p && !out.includes(p)) out.push(p);
+      }
+    }
+    return out;
+  }
+
+  function sentences(text) {
+    return String(text).split(/(?<=[.!?。])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+  }
+
+  // 숫자에 붙은 이름표: 숫자 바로 앞 한두 낱말(「수익률 12%」 → 「수익률」)
+  function labeledNumbers(text) {
+    const out = [];
+    const re = /([가-힣A-Za-z]{2,12})\s*(?:은|는|이|가|:)?\s*([+\-−]?\d[\d,]*(?:\.\d+)?)\s*(%|원|만\s*원|억|달러|건|명|개)/g;
+    let m;
+    while ((m = re.exec(text))) out.push({ label: m[1], value: m[2].replace(/,/g, '').replace('−', '-'), unit: m[3].replace(/\s/g, '') });
+    return out;
+  }
+
+  // text: 지금 답, prior: 같은 대화의 앞 AI 답들(문자열 배열), banned: 사용자가 금지한 문구(bans()). → [{type, title, detail}]
+  function check(text, prior, banned, opts) {
+    opts = opts || {}; // {hasLink: 화면에 진짜 링크 있음, hasCode: 코드 · 출력 블록 있음} — content.js가 알려 줌
+    const flags = [];
+    const raw = String(text || '');
+    const t = raw.replace(/"[^"\n]{4,}"|“[^”\n]{4,}”|「[^」\n]{4,}」|'[^'\n]*[가-힣][^'\n]*'/g, ' '); // 작은따옴표는 한글 인용만(영어 아포스트로피가 본문 삼키던 것, Fable 11-16) // 따옴표 안 = 남의 말 인용
+    const evidence = EVIDENCE.test(t) || !!opts.hasCode;
+    for (const s of sentences(t)) {
+      if (DONE.test(s) && !evidence && !ENDED.test(s)) {
+        flags.push({ type: 'done', title: '확인 안 된 「완료」', detail: s.slice(0, 120) });
+        break;
+      }
+    }
+    for (const s of sentences(t)) {
+      if (PROMISE.test(s)) {
+        flags.push({ type: 'promise', title: '지킬 수 없는 약속', detail: s.slice(0, 120) + ' — 채팅 AI는 먼저 말을 걸지 못합니다' });
+        break;
+      }
+    }
+    const unsourced = [];
+    for (const s of sentences(t)) {
+      if (opts.hasLink || SOURCE.test(s) || /계산\s*[:：]/.test(s) || !CLAIM.test(s)) continue;
+      const nums = [...s.matchAll(MONEYNUM)].map(m => m[0]);
+      if (nums.length && !unsourced.includes(nums[0])) unsourced.push(nums[0]);
+    }
+    if (unsourced.length) flags.push({ type: 'nosource', title: '출처 없는 숫자', detail: unsourced.slice(0, 5).join(', ') });
+    if (prior && prior.length) {
+      const before = new Map();
+      for (const p of prior) for (const n of labeledNumbers(p)) before.set(n.label + '|' + n.unit, n.value);
+      const changed = [];
+      for (const n of labeledNumbers(t)) {
+        const old = before.get(n.label + '|' + n.unit);
+        if (old !== undefined && old !== n.value) changed.push(`${n.label} ${old}${n.unit} → ${n.value}${n.unit}`);
+      }
+      if (changed.length) flags.push({ type: 'changed', title: '앞 답과 숫자가 바뀜', detail: changed.slice(0, 3).join(' / ') });
+    }
+    const stepLines = t.split('\n').filter(l => STEP.test(l)).length;
+    if (stepLines >= 2 && !TRIED.test(t)) flags.push({ type: 'procedure', title: '해 보지 않은 절차일 수 있음', detail: '단계 안내가 있는데 직접 확인했다는 말이 없습니다' });
+    if (!LINK.test(raw) && !opts.hasLink) {
+      for (const s of sentences(t)) {
+        if (NAMEDSRC.test(s) || (SURE.test(s) && !EVIDENCE.test(s))) {
+          flags.push({ type: 'nocite', title: '근거 없는 확신 · 이름만 댄 출처', detail: s.slice(0, 120) + ' — 링크 · 원문이 없습니다' });
+          break;
+        }
+      }
+    }
+    const hit = (banned || []).filter(p => t.includes(p)); // 따옴표로 「안 쓰겠다」 인용한 건 반복 아님
+    if (hit.length) flags.push({ type: 'repeat', title: '하지 말라고 한 말을 또 함', detail: hit.slice(0, 3).map(p => `「${p}」`).join(', ') });
+    return flags;
+  }
+
+  function challenge(flags) {
+    const ask = {
+      done: '방금 「완료/된다」고 한 부분, 실제로 확인한 결과(출력 · 화면 · 로그)를 그대로 보여 줘. 확인 안 했으면 안 했다고 말해.',
+      promise: '너는 먼저 말을 걸 수 없잖아. 지킬 수 없는 약속은 빼고, 지금 할 수 있는 건 지금 해 줘.',
+      nosource: '숫자마다 출처(링크나 계산식)를 붙여 줘. 출처 없는 숫자는 「확인 안 됨」이라고 표시해.',
+      changed: '앞에서 말한 숫자와 지금 숫자가 다르다. 어느 게 맞는지, 왜 바뀌었는지 설명해.',
+      procedure: '이 단계들은 직접 확인한 거야, 짐작이야? 공식 안내 링크를 붙이거나 짐작이면 짐작이라고 해.',
+      nocite: '「확실하다」 「문서에 따르면」이라고 한 근거를 링크나 원문 그대로 보여 줘. 못 찾으면 모른다고 해.',
+      repeat: '하지 말라고 한 말을 또 했다. 앞으로 이 대화 끝까지 그 말 빼고 다시 써 줘.'
+    };
+    return [...new Set(flags.map(f => ask[f.type]).filter(Boolean))].join('\n');
+  }
+
+  const api = { check, challenge, labeledNumbers, sentences, bans };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.AIGamdok = api;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+<script>
+(function () {
+  const R = self.AIGamdok, $ = id => document.getElementById(id);
+  const out = $('out');
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  $('go').addEventListener('click', () => {
+    const text = $('ans').value.trim();
+    out.replaceChildren();
+    if (!text) { out.append(el('div', 'ok', 'AI 답을 먼저 붙여 넣어 주세요.')); return; }
+    const prior = $('prior').value.trim() ? [$('prior').value] : [];
+    const flags = R.check(text, prior, R.bans([$('mine').value]));
+    if (!flags.length) { out.append(el('div', 'ok', '✓ 잡힌 의심 없음 — 그래도 중요한 건 직접 확인하세요.')); return; }
+    const box = el('div', 'box');
+    box.append(el('h2', null, `🔍 의심 ${flags.length}건`));
+    const ul = el('ul');
+    for (const f of flags) { const li = el('li'); li.append(el('b', null, f.title), el('span', null, f.detail)); ul.append(li); }
+    const ask = R.challenge(flags);
+    const btn = el('button', null, '「근거 대라」 문장 복사');
+    btn.id = 'ask';
+    const pre = el('div', null, ask); pre.id = 'asktext';
+    btn.addEventListener('click', async () => {
+      pre.style.display = 'block';
+      try { await navigator.clipboard.writeText(ask); btn.textContent = '복사됨 — AI 앱 입력칸에 붙여 넣으세요'; }
+      catch (e) { btn.textContent = '아래 문장을 길게 눌러 복사하세요'; }
+    });
+    box.append(ul, btn, pre);
+    out.append(box);
+    out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  $('clear').addEventListener('click', () => { ['ans', 'prior', 'mine'].forEach(i => $(i).value = ''); out.replaceChildren(); });
+})();
+</script>
+</body>
+</html>
